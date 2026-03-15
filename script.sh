@@ -1,12 +1,29 @@
 #!/bin/bash
 
+# Usage:
+#   ./script.sh col   # uses lab02.c (default)
+#   ./script.sh row   # uses lab02-row.c
+MODE="${1:-col}"
+
 # --- CONFIGURATION ---
-SOURCE_FILE="lab02.c"       # Your C file name
-OUTPUT_EXE="lab02"         # The executable name
+SOURCE_FILE="lab02.c"       # Default source file
+OUTPUT_EXE="lab02"          # Default executable name
 CSV_FILE="results-fullrun.csv"    # The output CSV file name
 SIZE_INPUTS=(25000 30000 40000 50000 100000) # Add the sizes you want to test here
 T_INPUTS=(1 2 4 8 16 32 64)
 # ---------------------
+
+if [ "$MODE" = "row" ]; then
+    SOURCE_FILE="lab02-row.c"
+    OUTPUT_EXE="lab02-row"
+elif [ "$MODE" = "col" ]; then
+    SOURCE_FILE="lab02.c"
+    OUTPUT_EXE="lab02"
+else
+    echo "Invalid mode: $MODE"
+    echo "Usage: ./script.sh [col|row]"
+    exit 1
+fi
 
 # 1. Compile the program
 echo "Compiling $SOURCE_FILE..."
