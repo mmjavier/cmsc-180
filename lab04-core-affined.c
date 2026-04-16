@@ -165,6 +165,9 @@ int main(int argc, char **argv){
 
         if (is_slave0) {
             int received_n;
+            int my_start = 0;
+            int my_end = t;
+
             recv(new_socket, &received_n, sizeof(int), 0);
             double **full_matrix = generate_matrix(n, n);
             for(int r = 0; r < n; r++) {
@@ -176,43 +179,50 @@ int main(int argc, char **argv){
                 }
             }
 
-            int *sockets = malloc(sizeof(int) * t);
-            int current_row = rows_per_slave + (0 < remaining_rows ? 1 : 0);
-            for (int i = 1; i < t; i++) {
-                sockets[i] = socket(AF_INET, SOCK_STREAM, 0);
+            // Broadcast tree scatter
+            while (my_end - my_start > 1) {
+                int mid = my_start + (my_end - my_start) / 2;
+                int sock = socket(AF_INET, SOCK_STREAM, 0);
                 struct sockaddr_in serv_addr;
                 serv_addr.sin_family = AF_INET;
-                serv_addr.sin_port = htons(ports[i]);
-                inet_pton(AF_INET, ips[i], &serv_addr.sin_addr);
+                serv_addr.sin_port = htons(ports[mid]);
+                inet_pton(AF_INET, ips[mid], &serv_addr.sin_addr);
                 
-                while (connect(sockets[i], (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+                while (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
                     usleep(100000);
                 }
                 
-                int rows_to_send = rows_per_slave + (i < remaining_rows ? 1 : 0);
-                send(sockets[i], &rows_to_send, sizeof(int), 0);
-                for(int r = 0; r < rows_to_send; r++) {
-                    send(sockets[i], full_matrix[current_row + r], sizeof(double) * n, 0);
+                send(sock, &n, sizeof(int), 0);
+                send(sock, &mid, sizeof(int), 0);
+                send(sock, &my_end, sizeof(int), 0);
+                for(int r = 0; r < n; r++) {
+                    send(sock, full_matrix[r], sizeof(double) * n, 0);
                 }
-                current_row += rows_to_send;
+                close(sock);
+                
+                my_end = mid;
             }
 
             // process own submatrix
-            int my_rows = rows_per_slave + (0 < remaining_rows ? 1 : 0);
-            mmtRow(full_matrix, n, 0, my_rows);
+            int my_id = my_start;
+            int my_rows = rows_per_slave + (my_id < remaining_rows ? 1 : 0);
+            int current_row = 0;
+            for (int i = 0; i < my_id; i++) {
+                current_row += rows_per_slave + (i < remaining_rows ? 1 : 0);
+            }
+
+            mmtRow(full_matrix, n, current_row, my_rows);
 
             send(new_socket, "ack", 4, 0);
-            for(int r = 0; r < my_rows; r++) {
+            for(int r = current_row; r < current_row + my_rows; r++) {
                 send(new_socket, full_matrix[r], sizeof(double) * n, 0);
             }
             
-            for (int i = 1; i < t; i++) close(sockets[i]);
-            free(sockets);
             close(new_socket);
             int64_t end = timestamp_now();
             printf("Slave 0 Elapsed Time:\n%lf\n", timestamp_to_seconds(end - start));
         } else {
-            // Slaves 1..T-1 receive 2 connections: one from master, one from slave0
+            // Slaves 1..T-1 receive 2 connections: one from master, one from parent
             int sock1 = new_socket;
             int sock2;
             if ((sock2 = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
@@ -222,42 +232,78 @@ int main(int argc, char **argv){
             int first_int;
             recv(sock1, &first_int, sizeof(int), 0);
             
-            int master_socket, s0_socket, rows_to_receive;
+            int master_socket, parent_socket;
+            int received_n, my_start, my_end;
+            
             if (first_int == -1) {
                 master_socket = sock1;
-                s0_socket = sock2;
-                recv(s0_socket, &rows_to_receive, sizeof(int), 0);
+                parent_socket = sock2;
+                recv(parent_socket, &received_n, sizeof(int), 0);
+                recv(parent_socket, &my_start, sizeof(int), 0);
+                recv(parent_socket, &my_end, sizeof(int), 0);
             } else {
                 master_socket = sock2;
-                s0_socket = sock1;
-                rows_to_receive = first_int;
+                parent_socket = sock1;
+                received_n = first_int;
+                recv(parent_socket, &my_start, sizeof(int), 0);
+                recv(parent_socket, &my_end, sizeof(int), 0);
+                
                 int identifier;
                 recv(master_socket, &identifier, sizeof(int), 0);
             }
             
-            double **submatrix = generate_matrix(rows_to_receive, n);
-            for(int r = 0; r < rows_to_receive; r++) {
+            double **full_matrix = generate_matrix(received_n, received_n);
+            for(int r = 0; r < received_n; r++) {
                 size_t total_received = 0;
                 while (total_received < sizeof(double) * n) {
-                    ssize_t bytes = recv(s0_socket, ((char*)submatrix[r]) + total_received, sizeof(double) * n - total_received, 0);
+                    ssize_t bytes = recv(parent_socket, ((char*)full_matrix[r]) + total_received, sizeof(double) * n - total_received, 0);
                     if (bytes <= 0) break;
                     total_received += bytes;
                 }
             }
 
-            mmtRow(submatrix, n, 0, rows_to_receive);
+            // Broadcast tree scatter
+            while (my_end - my_start > 1) {
+                int mid = my_start + (my_end - my_start) / 2;
+                int sock = socket(AF_INET, SOCK_STREAM, 0);
+                struct sockaddr_in serv_addr;
+                serv_addr.sin_family = AF_INET;
+                serv_addr.sin_port = htons(ports[mid]);
+                inet_pton(AF_INET, ips[mid], &serv_addr.sin_addr);
+                
+                while (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+                    usleep(100000);
+                }
+                
+                send(sock, &received_n, sizeof(int), 0);
+                send(sock, &mid, sizeof(int), 0);
+                send(sock, &my_end, sizeof(int), 0);
+                for(int r = 0; r < received_n; r++) {
+                    send(sock, full_matrix[r], sizeof(double) * n, 0);
+                }
+                close(sock);
+                
+                my_end = mid;
+            }
+
+            int my_id = my_start;
+            int my_rows = rows_per_slave + (my_id < remaining_rows ? 1 : 0);
+            int current_row = 0;
+            for (int i = 0; i < my_id; i++) {
+                current_row += rows_per_slave + (i < remaining_rows ? 1 : 0);
+            }
+
+            mmtRow(full_matrix, received_n, current_row, my_rows);
             
             send(master_socket, "ack", 4, 0);
-            for(int r = 0; r < rows_to_receive; r++) {
-                send(master_socket, submatrix[r], sizeof(double) * n, 0);
+            for(int r = current_row; r < current_row + my_rows; r++) {
+                send(master_socket, full_matrix[r], sizeof(double) * n, 0);
             }
             
-            close(s0_socket);
+            close(parent_socket);
             close(master_socket);
             int64_t end = timestamp_now();
             printf("Slave Elapsed Time:\n%lf\n", timestamp_to_seconds(end - start));
-            printf("Received Matrix:\n");
-            print_matrix(submatrix, rows_to_receive, 0, n);
         }
         close(server_fd);
     }
