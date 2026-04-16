@@ -55,7 +55,7 @@ for n in "${N_INPUTS[@]}"; do
                 ./"$OUTPUT_EXE" "$n" "$port" 1 > /dev/null 2>&1 &
             done
             
-            # Sleep a bit longer to allow Terminal windows to open and sockets to bind
+            # Sleep a bit to allow background slaves to start and sockets to bind
             sleep 2
             
             # Run the master locally in the current foreground
