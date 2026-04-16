@@ -15,9 +15,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#ifndef __APPLE__
 #include <sched.h>
-#endif
 
 //Helper Functions
 double min (double **mat, int n, int col);
@@ -41,16 +39,12 @@ int main(int argc, char **argv){
     int s = atoi(argv[3]);
 
 #ifdef CORE_AFFINED
-#ifdef __linux__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(0, &cpuset); // Pin to core 0
     if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == -1) {
         perror("sched_setaffinity");
     }
-#else
-    printf("Warning: Core affinity is only supported on Linux.\n");
-#endif
 #endif
 
     int t = 0;
@@ -161,13 +155,26 @@ int main(int argc, char **argv){
         if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
             perror("setsockopt"); exit(EXIT_FAILURE);
         }
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY;
-        address.sin_port = htons(p);
         
-        if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-            perror("bind failed"); exit(EXIT_FAILURE);
+        int my_slave_id = -1;
+        for (int i = 0; i < t; i++) {
+            if (ports[i] == p) {
+                address.sin_family = AF_INET;
+                address.sin_port = htons(p);
+                if (inet_pton(AF_INET, ips[i], &address.sin_addr) <= 0) {
+                    continue;
+                }
+                if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) == 0) {
+                    my_slave_id = i;
+                    break;
+                }
+            }
         }
+        
+        if (my_slave_id == -1) {
+            perror("bind failed (no local matching IP/port found in config.txt)"); exit(EXIT_FAILURE);
+        }
+        
         if (listen(server_fd, 3) < 0) {
             perror("listen"); exit(EXIT_FAILURE);
         }
@@ -178,7 +185,7 @@ int main(int argc, char **argv){
         int64_t start = timestamp_now();
         int rows_per_slave = n / t;
         int remaining_rows = n % t;
-        int is_slave0 = (p == ports[0]);
+        int is_slave0 = (my_slave_id == 0);
 
         if (is_slave0) {
             int received_n;
