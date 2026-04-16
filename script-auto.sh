@@ -49,12 +49,10 @@ for n in "${N_INPUTS[@]}"; do
                 echo "127.0.0.1 $port" >> config.txt
             done
             
-            # Spawn t instances of the slave in new macOS Terminals
+            # Spawn t instances of the slave in the background
             for (( j=1; j<=t; j++ )); do
                 port=$(( 8000 + j ))
-                # Open a new macOS Terminal window specifically for each slave
-                # 'exit' is appended so the terminal window can close or stop when the slave finishes
-                osascript -e "tell application \"Terminal\" to do script \"cd \\\"$(pwd)\\\" && ./$OUTPUT_EXE $n $port 1 && exit\"" > /dev/null
+                ./"$OUTPUT_EXE" "$n" "$port" 1 > /dev/null 2>&1 &
             done
             
             # Sleep a bit longer to allow Terminal windows to open and sockets to bind
