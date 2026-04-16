@@ -8,7 +8,7 @@ MODE="${1:-standard}"
 # --- CONFIGURATION ---
 CSV_FILE="results.csv"    # The output CSV file name
 N_INPUTS=(1000 5000 10000) # Customize N values here
-T_INPUTS=(1 2 4 8)         # Customize T (slave count) values here
+# t is now explicitly read from config.txt
 # ---------------------
 
 if [ "$MODE" = "affined" ]; then
@@ -31,52 +31,35 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+if [ ! -f "config.txt" ]; then
+    echo "config.txt not found! Please create it with t on the first line, followed by IPs and ports."
+    exit 1
+fi
+
+t=$(head -n 1 config.txt | tr -d '\r')
+
 echo "Mode,N,T,Run1,Run2,Run3" > "$CSV_FILE"
 
 for n in "${N_INPUTS[@]}"; do
-    for t in "${T_INPUTS[@]}"; do
-        
-        row_data="$MODE,$n,$t"
-        echo "Testing $MODE with n=$n and t=$t slaves"
+    row_data="$MODE,$n,$t"
+    echo "Testing $MODE with n=$n and t=$t slaves"
 
-        for i in {1..3}; do
-            echo "  Run $i..."
-            
-            # Generate config.txt
-            > config.txt
-            for (( j=1; j<=t; j++ )); do
-                port=$(( 8000 + j ))
-                echo "127.0.0.1 $port" >> config.txt
-            done
-            
-            pids=()
-            
-            # Spawn t instances of the slave in the background
-            for (( j=1; j<=t; j++ )); do
-                port=$(( 8000 + j ))
-                ./"$OUTPUT_EXE" "$n" "$port" 1 > /dev/null &
-                pids+=($!)
-            done
-            
-            # Sleep 1 second for sockets to bind
-            sleep 1
-            
-            # Run the master
-            # Ensure master's port doesn't conflict or is ignored (using 0 here per instructions)
-            result=$(./"$OUTPUT_EXE" "$n" 0 0 | tail -n 1)
-            
-            # Wait for PIDs
-            for pid in "${pids[@]}"; do
-                wait "$pid" 2>/dev/null
-            done
-            
-            # Append result
-            row_data="$row_data,$result"
-        done
+    for i in {1..3}; do
+        echo "  Run $i..."
         
-        # Save the completed row to the CSV file
-        echo "$row_data" >> "$CSV_FILE"
+        # Pause to let the user manually start the slaves in their own terminals/machines
+        read -p "Please ensure all $t slaves are running, then press [Enter] to start Master..."
+        
+        # Run the master locally in the current background
+        # Ensure master's port doesn't conflict or is ignored (using 0 here per instructions)
+        result=$(./"$OUTPUT_EXE" "$n" 0 0 | tail -n 1)
+        
+        # Append result
+        row_data="$row_data,$result"
     done
+    
+    # Save the completed row to the CSV file
+    echo "$row_data" >> "$CSV_FILE"
 done
 
 echo "Done! Results saved to $CSV_FILE"

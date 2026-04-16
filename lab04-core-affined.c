@@ -32,7 +32,7 @@ void mmtRow(double ** matrix, int n, int start_col, int num_of_iter);
 
 int main(int argc, char **argv){
     if (argc < 4) {
-        printf("Usage: %s <n: size> <p: port> <s: status 0=master, 1=slave>\n", argv[0]);
+        printf("Usage: %s <n: size> <p: port> <s: status 0=master, 1=slave> [input_file]\n", argv[0]);
         return 1;
     }
     
@@ -70,10 +70,27 @@ int main(int argc, char **argv){
 
     if (s == 0) { // Master
         double **matrix = generate_matrix(n, n);
-        srand(time(NULL));
-        for (int i = 0; i < n; i++){
-            for(int j = 0; j < n; j++){
-                matrix[i][j] = (double)generate_random(100);
+        if (argc >= 5) {
+            FILE *fptr = fopen(argv[4], "r");
+            if (fptr) {
+                int dummy_n, dummy_t;
+                fscanf(fptr, "%d %d", &dummy_n, &dummy_t); // read first line
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < n; j++) {
+                        fscanf(fptr, "%lf", &matrix[i][j]);
+                    }
+                }
+                fclose(fptr);
+            } else {
+                printf("Error opening input file\n");
+                exit(1);
+            }
+        } else {
+            srand(time(NULL));
+            for (int i = 0; i < n; i++){
+                for(int j = 0; j < n; j++){
+                    matrix[i][j] = (double)generate_random(100);
+                }
             }
         }
 
