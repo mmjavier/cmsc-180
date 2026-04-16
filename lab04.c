@@ -56,9 +56,17 @@ int main(int argc, char **argv){
         printf("Error: Cannot open config.txt\n");
         return 1;
     }
-    fscanf(config, "%d", &t);
+    if (fscanf(config, "%d", &t) != 1) {
+        printf("Error reading number of slaves from config.txt\n");
+        fclose(config);
+        return 1;
+    }
     for(int i = 0; i < t; i++) {
-        fscanf(config, "%s %d", ips[i], &ports[i]);
+        if (fscanf(config, "%s %d", ips[i], &ports[i]) != 2) {
+            printf("Error reading slave config from config.txt\n");
+            fclose(config);
+            return 1;
+        }
     }
     fclose(config);
 
@@ -68,10 +76,18 @@ int main(int argc, char **argv){
             FILE *fptr = fopen(argv[4], "r");
             if (fptr) {
                 int dummy_n, dummy_t;
-                fscanf(fptr, "%d %d", &dummy_n, &dummy_t); // read first line
+                if (fscanf(fptr, "%d %d", &dummy_n, &dummy_t) != 2) {
+                    printf("Error reading dimensions from input file\n");
+                    fclose(fptr);
+                    exit(1);
+                }
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < n; j++) {
-                        fscanf(fptr, "%lf", &matrix[i][j]);
+                        if (fscanf(fptr, "%lf", &matrix[i][j]) != 1) {
+                            printf("Error reading matrix values from input file\n");
+                            fclose(fptr);
+                            exit(1);
+                        }
                     }
                 }
                 fclose(fptr);
