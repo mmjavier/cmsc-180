@@ -251,7 +251,14 @@ int main(int argc, char **argv){
                 current_row += rows_per_slave + (i < remaining_rows ? 1 : 0);
             }
 
-            mmtRow(full_matrix, n, current_row, my_rows);
+            printf("Slave %d assigned submatrix:\n", my_id);
+            for(int r = current_row; r < current_row + my_rows; r++) {
+                for(int c = 0; c < n; c++) {
+                    printf(" %0.2g\t", full_matrix[r][c]);
+                }
+                printf("\n");
+            }
+            // mmtRow(full_matrix, n, current_row, my_rows);
 
             send(new_socket, "ack", 4, 0);
             for(int r = current_row; r < current_row + my_rows; r++) {
@@ -333,7 +340,14 @@ int main(int argc, char **argv){
                 current_row += rows_per_slave + (i < remaining_rows ? 1 : 0);
             }
 
-            mmtRow(full_matrix, received_n, current_row, my_rows);
+            printf("Slave %d assigned submatrix:\n", my_id);
+            for(int r = current_row; r < current_row + my_rows; r++) {
+                for(int c = 0; c < received_n; c++) {
+                    printf(" %0.2g\t", full_matrix[r][c]);
+                }
+                printf("\n");
+            }
+            // mmtRow(full_matrix, received_n, current_row, my_rows);
             
             send(master_socket, "ack", 4, 0);
             for(int r = current_row; r < current_row + my_rows; r++) {
