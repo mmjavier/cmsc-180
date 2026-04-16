@@ -1,8 +1,8 @@
 /*
 @author: Myko Jefferson M. Javier
-@date: March 11, 2026
+@date: March 16, 2026
 @section: CMSC 180 - CD3L
-@code-desc: Implementing Min-Max Transformation on an nxn matrix in C using Threads
+@code-desc: Implementing Min-Max Transformation on an nxn matrix in C using Threads with core affinity
 */
 
 #define _GNU_SOURCE
@@ -129,7 +129,7 @@ int main(int argc, char **argv){
         pthread_join(threads[i], NULL);
     }
     
-    //print_matrix(matrix, n, 0, n);
+    print_matrix(matrix, n, 0, n);
     int64_t end = timestamp_now();
     printf("Elapsed Time:\n%lf\n", timestamp_to_seconds(end - start));
     
@@ -153,10 +153,10 @@ void *thread_mmt(void *arg){
 #endif
     
     // Call mmt on this thread's column range mmt for columns [start_col, start_col + num_cols)
-    // printf("Thread %d\n", data->id);
+    printf("Thread %d\n", data->id);
     mmt(data->matrix, data->n, data->start_col, data->num_cols);
 
-    // print_matrix(data->matrix, data->n, data->start_col, data->num_cols);
+    print_matrix(data->matrix, data->n, data->start_col, data->num_cols);
     return NULL;
 }
 

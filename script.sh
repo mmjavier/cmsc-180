@@ -1,62 +1,76 @@
 #!/bin/bash
 
 # Usage:
-#   ./script.sh col   # uses lab02.c (default)
-#   ./script.sh row   # uses lab02-row.c
-MODE="${1:-col}"
+#   ./script.sh standard   # uses lab04.c (default)
+#   ./script.sh affined    # uses lab04-core-affined.c
+MODE="${1:-standard}"
 
 # --- CONFIGURATION ---
-SOURCE_FILE="lab02.c"       # Default source file
-OUTPUT_EXE="lab02"          # Default executable name
-CSV_FILE="results-fullrun.csv"    # The output CSV file name
-SIZE_INPUTS=(25000 30000 40000 50000 100000) # Add the sizes you want to test here
-T_INPUTS=(1 2 4 8 16 32 64)
+CSV_FILE="results.csv"    # The output CSV file name
+N_INPUTS=(1000 5000 10000) # Customize N values here
+T_INPUTS=(1 2 4 8)         # Customize T (slave count) values here
 # ---------------------
 
-if [ "$MODE" = "row" ]; then
-    SOURCE_FILE="lab02-row.c"
-    OUTPUT_EXE="lab02-row"
-elif [ "$MODE" = "col" ]; then
-    SOURCE_FILE="lab02.c"
-    OUTPUT_EXE="lab02"
+if [ "$MODE" = "affined" ]; then
+    SOURCE_FILE="lab04-core-affined.c"
+    OUTPUT_EXE="lab04-core-affined"
+elif [ "$MODE" = "standard" ]; then
+    SOURCE_FILE="lab04.c"
+    OUTPUT_EXE="lab04"
 else
     echo "Invalid mode: $MODE"
-    echo "Usage: ./script.sh [col|row]"
+    echo "Usage: ./script.sh [standard|affined]"
     exit 1
 fi
 
-# 1. Compile the program
 echo "Compiling $SOURCE_FILE..."
-gcc -pthread "$SOURCE_FILE" -o "$OUTPUT_EXE"
+gcc -pthread "$SOURCE_FILE" -o "$OUTPUT_EXE" -lm -O2
 
-# Check if compilation succeeded
 if [ $? -ne 0 ]; then
     echo "Compilation failed! Exiting."
     exit 1
 fi
 
-# 2. Prepare the CSV file (Header)
-# This creates columns: Input Size, Thread Count, Run 1, Run 2, Run 3
-echo "Input Size,Thread Count,Run 1,Run 2,Run 3" > "$CSV_FILE"
+echo "Mode,N,T,Run1,Run2,Run3" > "$CSV_FILE"
 
-# 3. Loop through each input size (3, 500, etc.)
-for n in "${SIZE_INPUTS[@]}"; do
+for n in "${N_INPUTS[@]}"; do
     for t in "${T_INPUTS[@]}"; do
-        # Start the row with the input size and thread count
-        row_data="$n,$t"
-        echo "Testing input size $n and thread count $t"
-
-        # Run the program 3 times for this specific size
-        for i in {1..3}; do
-            #Recompile
-            echo "Recompiling $SOURCE_FILE..."
-            gcc -pthread "$SOURCE_FILE" -o "$OUTPUT_EXE"
-            # Run the program with input redirection (<<<)
-            # We capture the output into a variable.
-            # 'tail -n 1' ensures we grab the LAST line printed (usually the result/time)
-            result=$(echo -e "$n\n$t" | ./"$OUTPUT_EXE" | tail -n 1)
         
-            # Append the result to our current CSV row
+        row_data="$MODE,$n,$t"
+        echo "Testing $MODE with n=$n and t=$t slaves"
+
+        for i in {1..3}; do
+            echo "  Run $i..."
+            
+            # Generate config.txt
+            > config.txt
+            for (( j=1; j<=t; j++ )); do
+                port=$(( 8000 + j ))
+                echo "127.0.0.1 $port" >> config.txt
+            done
+            
+            pids=()
+            
+            # Spawn t instances of the slave in the background
+            for (( j=1; j<=t; j++ )); do
+                port=$(( 8000 + j ))
+                ./"$OUTPUT_EXE" "$n" "$port" 1 > /dev/null &
+                pids+=($!)
+            done
+            
+            # Sleep 1 second for sockets to bind
+            sleep 1
+            
+            # Run the master
+            # Ensure master's port doesn't conflict or is ignored (using 0 here per instructions)
+            result=$(./"$OUTPUT_EXE" "$n" 0 0 | tail -n 1)
+            
+            # Wait for PIDs
+            for pid in "${pids[@]}"; do
+                wait "$pid" 2>/dev/null
+            done
+            
+            # Append result
             row_data="$row_data,$result"
         done
         
