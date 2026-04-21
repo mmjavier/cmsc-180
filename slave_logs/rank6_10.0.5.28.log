@@ -1,0 +1,11 @@
+
+=== SLAVE PROCESS ===
+Listening on port 5007...
+Connection accepted from 10.0.4.245
+Receiving submatrix chunk for subtree: 3000 x 16000 as Rank 6 (Group 6 to 8)
+Slave 6 forwarded contiguous chunk to left node (Slave 7, 1000 rows)
+Slave 6 forwarded contiguous chunk to right node (Slave 8, 1000 rows)
+
+Slave 6 waiting for master to collect results...
+
+Time Elapsed (slave): 12.577657 seconds

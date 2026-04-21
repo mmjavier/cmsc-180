@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
         
         int64_t end_time = timestamp_now();
         
-        //Comment out to print matrix
+        // Comment out to print matrix
         // printf("\n=== RECEIVED MATRIX ===\n");
         // print_matrix(matrix, n, n);
         
@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
         int my_start_row = payload_start_row;
         int my_num_rows = get_num_rows(rank, rows, total_slaves);
         
-        //Comment out to print the submatrix
+        // Comment out to print the submatrix
         // printf("\nSlave %d Assigned Submatrix (rows %d to %d):\n", rank, my_start_row, my_start_row + my_num_rows - 1);
         // print_matrix(submatrix, my_num_rows, cols);
         

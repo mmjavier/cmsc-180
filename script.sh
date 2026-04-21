@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # --- CONFIGURATION ---
-SOURCE_FILE="lab04.c"
-OUTPUT_EXE="lab04"
-CSV_FILE="results-lab04.csv"
+SOURCE_FILE="lab04-core-affined.c"
+OUTPUT_EXE="lab04-core-affined"
+CSV_FILE="results-lab04-core-affined.csv"
 SIZE_INPUTS=(4000 8000 16000)   # Matrix dimensions
 T_INPUTS=(2 4 8 16)             # Number of slaves
 # ---------------------
