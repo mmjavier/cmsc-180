@@ -59,7 +59,12 @@ for n in "${SIZE_INPUTS[@]}"; do
             # --- Start Slave Processes in the Background using SSH ---
             head -n "$t" "$SLAVES_LIST_FILE" | while read -r IP PORT; do
                 if [ -n "$IP" ] && [ -n "$PORT" ]; then
-                    echo "    -> Spawning slave on $IP at port $PORT..."
+                    echo "    -> Sending config & spawning slave on $IP at port $PORT..."
+                    
+                    # 1. Copy the dynamically generated config.txt to the slave
+                    sshpass -p "$PASSWORD" scp -o StrictHostKeyChecking=no config.txt "$USERNAME@$IP:$REMOTE_DIR/"
+                    
+                    # 2. Start the slave
                     # -o StrictHostKeyChecking=no prevents yes/no prompts
                     # nohup ... < /dev/null > /dev/null 2>&1 & thoroughly spins off the background process
                     sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$USERNAME@IP" \
