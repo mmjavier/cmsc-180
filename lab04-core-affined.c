@@ -65,9 +65,16 @@ void tree_broadcast_slave(int my_rank, int group_start, int group_end, int total
 
 int main(int argc, char **argv) {
     int n = 0, p = 0, s = -1;
+    char *filename = NULL;
     
     if (argc >= 4) {
+        // Try parsing first argument as integer
         n = atoi(argv[1]);
+        if (n == 0 && strcmp(argv[1], "0") != 0) {
+            // It's not a number, interpret as filename
+            filename = argv[1];
+        }
+        
         p = atoi(argv[2]);
         s = atoi(argv[3]);
     } else {
@@ -105,13 +112,48 @@ int main(int argc, char **argv) {
             printf("  Slave %d: %s:%d\n", i, slaves[i].ip, slaves[i].port);
         }
         
-        // Generate random non-zero matrix
-        double **matrix = generate_matrix(n, n);
-        srand(time(NULL));
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                matrix[i][j] = generate_random(100);
+        // Check if matrix generation is file-based or randomized
+        double **matrix = NULL;
+        if (filename != NULL) {
+            // Read matrix from input file
+            FILE *infile = fopen(filename, "r");
+            if (!infile) {
+                perror("fopen input file");
+                return 1;
             }
+            
+            // Read dimension n
+            if (fscanf(infile, "%d", &n) != 1) {
+                fprintf(stderr, "Failed to read dimensions from %s\n", filename);
+                return 1;
+            }
+            
+            matrix = generate_matrix(n, n);
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < n; j++) {
+                    if (fscanf(infile, "%lf", &matrix[i][j]) != 1) {
+                        fprintf(stderr, "Error reading matrix element at [%d][%d]\n", i, j);
+                        fclose(infile);
+                        return 1;
+                    }
+                }
+            }
+            fclose(infile);
+            printf("Loaded %dx%d matrix from %s\n", n, n, filename);
+        } else {
+            if (n <= 0) {
+                fprintf(stderr, "Invalid matrix dimension specified.\n");
+                return 1;
+            }
+            // Generate random non-zero matrix
+            matrix = generate_matrix(n, n);
+            srand(time(NULL));
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < n; j++) {
+                    matrix[i][j] = generate_random(100);
+                }
+            }
+            printf("Generated %dx%d randomized matrix\n", n, n);
         }
         
         // Calculate rows per slave
