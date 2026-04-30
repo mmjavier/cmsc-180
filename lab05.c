@@ -134,8 +134,8 @@ int main(int argc, char **argv)
         if (read_config(&slaves, &t) != 0) {
             printf("No config – running locally\n");
             int64_t a = ts_now(); mmt(matrix, n, 0, n); int64_t b = ts_now();
-            printf("Local MMT: %lf s\n", ts_sec(b-a));
-            print_matrix(matrix, n, n);
+            printf("Time Elapsed: %lf s\n", ts_sec(b-a));
+            // print_matrix(matrix, n, n);
             free_matrix(matrix, n); return 0;
         }
         printf("Slaves: %d\n", t);
@@ -166,9 +166,9 @@ int main(int argc, char **argv)
         close(sock0);
 
         int64_t t1 = ts_now();
-        printf("\n=== Master wall-clock: %lf seconds ===\n", ts_sec(t1-t0));
-        printf("\nTransformed matrix:\n");
-        print_matrix(matrix, n, n);
+        printf("Total Time Elapsed: %lf seconds", ts_sec(t1-t0));
+        // printf("\nTransformed matrix:\n");
+        // print_matrix(matrix, n, n);
 
         free(slaves); free_matrix(matrix, n);
 
@@ -329,12 +329,12 @@ void tree_node(int parent_sock,
     mmt(sub, n, 0, my_cols);
     int64_t mmt_e = ts_now();
 
-    printf("Slave %d MMT time: %lf seconds\n", rank, ts_sec(mmt_e - mmt_s));
-    printf("Slave %d transformed submatrix (own %d cols):\n", rank, my_cols);
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < my_cols; j++) printf("%8.4f ", sub[i][j]);
-        printf("\n");
-    }
+    printf("'Total Time Elapsed:' %lf seconds\n", ts_sec(mmt_e - mmt_s));
+    // printf("Slave %d transformed submatrix (own %d cols):\n", rank, my_cols);
+    // for (int i = 0; i < n; i++) {
+    //     for (int j = 0; j < my_cols; j++) printf("%8.4f ", sub[i][j]);
+    //     printf("\n");
+    // }
 
     /* ── Step 5: receive left child result (backtrack) ──────────── */
     if (left_sock >= 0) {

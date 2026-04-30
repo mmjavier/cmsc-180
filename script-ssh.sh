@@ -16,10 +16,10 @@
 # Error handling is done explicitly per command instead.
 
 # ------- USER CONFIGURATION -------
-MASTER_IP="10.0.4.181"     # <-- Set to THIS machine's LAN IP
+MASTER_IP="10.0.4.70"     # <-- Set to THIS machine's LAN IP
 SSH_USER="acer"             # <-- SSH username on all slave PCs
 SSH_PASS="useruser"         # Password for all slave PCs
-BINARY="./lab04"            # Compiled binary (must be in current dir)
+BINARY="./lab05"            # Compiled binary (must be in current dir)
 REMOTE_DIR="~/Desktop"     # Scratch dir on slave PCs
 OUTPUT_CSV="results_ssh.csv"
 SLAVE_START_DELAY=3         # Seconds to wait for slaves to reach accept()
@@ -32,10 +32,10 @@ SCP="sshpass -p ${SSH_PASS} scp -o StrictHostKeyChecking=no"
 
 # 4 slave PCs (round-robin: rank r -> PC index r%4)
 SLAVE_IPS=(
-    "10.0.4.184"
-    "10.0.4.245"
-    "10.0.5.28"
-    "10.0.4.24"
+    "10.0.4.114"
+    "10.0.4.163"
+    "10.0.4.41"
+    "10.0.4.164"
 )
 
 # Port for slave rank r = BASE_PORT + r + 1  (ranks 0-15 -> ports 5001-5016)
@@ -113,7 +113,7 @@ start_slaves() {
         port=$(get_slave_port $rank)
         info "Starting slave rank=$rank on $ip:$port ..."
         $SSH "${SSH_USER}@${ip}" \
-            "cd ${REMOTE_DIR} && ./lab04 ${n} ${port} 1 \
+            "cd ${REMOTE_DIR} && ./lab05 ${n} ${port} 1 \
              > slave_rank${rank}.log 2>&1" &
         SLAVE_PIDS+=($!)
     done
@@ -142,7 +142,7 @@ kill_slaves() {
         ip=$(get_slave_ip $rank)
         if [[ -z "${seen[$ip]}" ]]; then
             seen[$ip]=1
-            $SSH "${SSH_USER}@${ip}" "pkill -f lab04 2>/dev/null; true" &
+            $SSH "${SSH_USER}@${ip}" "pkill -f lab05 2>/dev/null; true" &
         fi
     done
     wait

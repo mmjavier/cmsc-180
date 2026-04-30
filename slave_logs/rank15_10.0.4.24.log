@@ -1,9 +1,0 @@
-
-=== SLAVE PROCESS ===
-Listening on port 5016...
-Connection accepted from 10.0.4.245
-Receiving submatrix chunk for subtree: 1000 x 16000 as Rank 15 (Group 15 to 15)
-
-Slave 15 waiting for master to collect results...
-
-Time Elapsed (slave): 13.198278 seconds

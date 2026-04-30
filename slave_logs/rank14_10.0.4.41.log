@@ -1,0 +1,10 @@
+
+=== SLAVE PROCESS (port 5015) ===
+Listening on port 5015
+Connected from 10.0.4.163
+Slave 14 pinned to core 14
+Slave 14: group [14..14] => global cols [14000..14999], my_cols=1000
+Slave 14: received 1000-col chunk
+'Total Time Elapsed:' 0.397783 seconds
+Slave 14: sent 1000-col assembled result back
+-
