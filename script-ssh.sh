@@ -19,7 +19,7 @@
 MASTER_IP="10.0.4.181"     # <-- Set to THIS machine's LAN IP
 SSH_USER="acer"             # <-- SSH username on all slave PCs
 SSH_PASS="useruser"         # Password for all slave PCs
-BINARY="./lab05"            # Compiled binary (must be in current dir)
+BINARY="./lab04"            # Compiled binary (must be in current dir)
 REMOTE_DIR="~/Desktop"     # Scratch dir on slave PCs
 OUTPUT_CSV="results_ssh.csv"
 SLAVE_START_DELAY=3         # Seconds to wait for slaves to reach accept()
@@ -150,23 +150,88 @@ kill_slaves() {
 
 # -------------------------------------------------------
 # collect_slave_logs <t>
+#   Fetches each slave's log into ./slave_logs/.
+#   Also sets the global LAST_SLAVE_LOGS array so
+#   get_slave_max_time() can read the just-fetched files.
 # -------------------------------------------------------
+declare -a LAST_SLAVE_LOGS
 collect_slave_logs() {
     local t=$1
     mkdir -p slave_logs
+    LAST_SLAVE_LOGS=()
+
     for (( rank=0; rank<t; rank++ )); do
-        local ip
+        local ip dest
         ip=$(get_slave_ip $rank)
+        dest="slave_logs/rank${rank}_${ip}.log"
         $SCP -q "${SSH_USER}@${ip}:${REMOTE_DIR}/slave_rank${rank}.log" \
-            "slave_logs/rank${rank}_${ip}.log" 2>/dev/null || true
+            "$dest" 2>/dev/null || true
+        LAST_SLAVE_LOGS+=("$dest")
     done
+
     info "Slave logs saved to ./slave_logs/"
 }
 
 # -------------------------------------------------------
+# get_slave_max_time <t>
+#   Reads LAST_SLAVE_LOGS (populated by collect_slave_logs),
+#   extracts each slave's computation time, and echoes the
+#   maximum value.  Echoes "ERROR" if no valid time is found.
+#
+#   Adjust the grep/awk pattern below to match the exact line
+#   your lab04 slave binary prints, e.g.:
+#     "Total Time Elapsed: 1.234567 seconds"
+#     "Computation time: 1.234567"
+#     "MMT time: 1.234567 s"
+# -------------------------------------------------------
+get_slave_max_time() {
+    local t=$1
+    local max_time="0"
+    local found=false
+
+    for (( rank=0; rank<t; rank++ )); do
+        local logfile="${LAST_SLAVE_LOGS[$rank]}"
+        if [[ ! -f "$logfile" ]]; then
+            warn "Slave log not found: $logfile" >&2
+            continue
+        fi
+
+        # ── EDIT THIS PATTERN to match your slave's output line ──
+        # Current pattern matches lines like:
+        #   "Total Time Elapsed: 1.234567 seconds"
+        # If your slave prints something different, change the grep
+        # pattern and the awk field index accordingly.
+        local stime
+        stime=$(grep -i 'Total Time Elapsed:' "$logfile" \
+                | awk '{print $4}' \
+                | tail -1)
+
+        if [[ -z "$stime" ]]; then
+            warn "Could not parse time from slave log: $logfile" >&2
+            continue
+        fi
+
+        info "  Slave rank=$rank time=${stime}s" >&2
+        found=true
+
+        # Keep running maximum using awk for float comparison
+        max_time=$(awk -v a="$max_time" -v b="$stime" \
+                   'BEGIN { print (b+0 > a+0) ? b : a }')
+    done
+
+    if $found; then
+        echo "$max_time"
+    else
+        echo "ERROR"
+    fi
+}
+
+# -------------------------------------------------------
 # run_one <n> <t> <run#>
-#   Runs a single experiment. Echoes the elapsed time (or ERROR).
-#   Does NOT write to CSV — caller does that after all 3 runs.
+#   Runs a single experiment. Echoes two space-separated
+#   values on stdout:  <master_elapsed> <slave_max_time>
+#   (or ERROR tokens on failure).
+#   All human-readable output goes to stderr.
 # -------------------------------------------------------
 run_one() {
     local n=$1 t=$2 run=$3
@@ -182,9 +247,12 @@ run_one() {
 
     wait_slaves
 
+    # Always collect logs so slave times are available even on error
+    collect_slave_logs "$t"
+
     if [[ $rc -ne 0 ]]; then
         error "Master exited with code $rc" >&2
-        echo "ERROR"
+        echo "ERROR ERROR"
         return
     fi
 
@@ -192,12 +260,15 @@ run_one() {
     if [[ -z "$elapsed" ]]; then
         warn "Could not parse elapsed time. Master output:" >&2
         echo "$master_out" >&2
-        echo "PARSE_ERROR"
+        echo "PARSE_ERROR PARSE_ERROR"
         return
     fi
 
-    success "n=$n  t=$t  run=$run  ->  ${elapsed}s" >&2
-    echo "$elapsed"
+    local slave_max
+    slave_max=$(get_slave_max_time "$t")
+
+    success "n=$n  t=$t  run=$run  ->  master=${elapsed}s  slave_max=${slave_max}s" >&2
+    echo "$elapsed $slave_max"
 
     info "Cooling down ${RUN_COOLDOWN}s ..." >&2
     sleep "$RUN_COOLDOWN"
@@ -250,8 +321,9 @@ main() {
 
     check_prerequisites
 
-    # CSV header — one row per (n,t), columns: n, t, Run 1, Run 2, Run 3, Average
-    echo "n,t,Run 1,Run 2,Run 3,Average" > "$OUTPUT_CSV"
+    # CSV header
+    echo "n,t,Run 1,Run 2,Run 3,Average,slave_max_run1,slave_max_run2,slave_max_run3,slave_max_ave" \
+        > "$OUTPUT_CSV"
 
     local total=$(( ${#N_VALUES[@]} * ${#T_VALUES[@]} ))
     local done_count=0
@@ -265,36 +337,61 @@ main() {
             generate_configs "$t"
             deploy_to_slaves "$t"
 
-            local times=()
-            local sum=0
-            local all_ok=true
+            local master_times=()
+            local slave_max_times=()
+            local master_sum=0
+            local slave_sum=0
+            local master_all_ok=true
+            local slave_all_ok=true
 
             for (( run=1; run<=RUNS; run++ )); do
-                local result
-                result=$(run_one "$n" "$t" "$run")
-                times+=("$result")
+                # run_one echoes "<master_elapsed> <slave_max>" on stdout
+                local result_line
+                result_line=$(run_one "$n" "$t" "$run")
 
-                # Add to sum only if it's a valid number
-                if echo "$result" | grep -qE '^[0-9]+\.[0-9]+$'; then
-                    sum=$(awk "BEGIN { printf \"%.6f\", $sum + $result }")
+                local mtime stime
+                mtime=$(echo "$result_line" | awk '{print $1}')
+                stime=$(echo "$result_line" | awk '{print $2}')
+
+                master_times+=("$mtime")
+                slave_max_times+=("$stime")
+
+                # Accumulate master sum
+                if echo "$mtime" | grep -qE '^[0-9]+\.[0-9]+$'; then
+                    master_sum=$(awk "BEGIN { printf \"%.6f\", $master_sum + $mtime }")
                 else
-                    all_ok=false
+                    master_all_ok=false
+                fi
+
+                # Accumulate slave max sum
+                if echo "$stime" | grep -qE '^[0-9]+\.[0-9]+$'; then
+                    slave_sum=$(awk "BEGIN { printf \"%.6f\", $slave_sum + $stime }")
+                else
+                    slave_all_ok=false
                 fi
             done
 
-            # Compute average
-            local avg
-            if $all_ok; then
-                avg=$(awk "BEGIN { printf \"%.6f\", $sum / $RUNS }")
+            # Compute averages
+            local master_avg slave_avg
+            if $master_all_ok; then
+                master_avg=$(awk "BEGIN { printf \"%.6f\", $master_sum / $RUNS }")
             else
-                avg="ERROR"
+                master_avg="ERROR"
+            fi
+
+            if $slave_all_ok; then
+                slave_avg=$(awk "BEGIN { printf \"%.6f\", $slave_sum / $RUNS }")
+            else
+                slave_avg="ERROR"
             fi
 
             # One CSV row for this (n, t) pair
-            echo "${n},${t},${times[0]},${times[1]},${times[2]},${avg}" >> "$OUTPUT_CSV"
-            success "Row written -> n=$n t=$t | runs: ${times[0]}, ${times[1]}, ${times[2]} | avg: ${avg}"
+            echo "${n},${t},${master_times[0]},${master_times[1]},${master_times[2]},${master_avg},${slave_max_times[0]},${slave_max_times[1]},${slave_max_times[2]},${slave_avg}" \
+                >> "$OUTPUT_CSV"
 
-            collect_slave_logs "$t"
+            success "Row written -> n=$n t=$t"
+            success "  master runs : ${master_times[0]}, ${master_times[1]}, ${master_times[2]} | avg: ${master_avg}"
+            success "  slave maxes : ${slave_max_times[0]}, ${slave_max_times[1]}, ${slave_max_times[2]} | avg: ${slave_avg}"
         done
     done
 
