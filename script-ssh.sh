@@ -19,7 +19,7 @@
 MASTER_IP="10.0.4.181"     # <-- Set to THIS machine's LAN IP
 SSH_USER="acer"             # <-- SSH username on all slave PCs
 SSH_PASS="useruser"         # Password for all slave PCs
-BINARY="./lab04"            # Compiled binary (must be in current dir)
+BINARY="./lab05"            # Compiled binary (must be in current dir)
 REMOTE_DIR="~/Desktop"     # Scratch dir on slave PCs
 OUTPUT_CSV="results_ssh.csv"
 SLAVE_START_DELAY=3         # Seconds to wait for slaves to reach accept()
